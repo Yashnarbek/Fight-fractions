@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Math Defender: Pro Edition</title>
+    <style>
+        :root {
+            --bg-color: #f0f4f8;
+            --primary-color: #2c3e50;
+            --accent-color: #e74c3c;
+            --success-color: #27ae60;
+            --ground-color: #7f8c8d;
+            --panel-bg: #ffffff;
+            --font-main: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        * { box-sizing: border-box; user-select: none; }
+
+        body {
+            margin: 0; padding: 0; width: 100vw; height: 100vh;
+            overflow: hidden; background-color: var(--bg-color);
+            font-family: var(--font-main); display: flex; flex-direction: column;
+        }
+
+        /* --- HUD --- */
+        #hud {
+            height: 10vh; display: flex; justify-content: space-between;
+            align-items: center; padding: 0 5vw; font-size: 2.5vh;
+            font-weight: bold; color: var(--primary-color);
+            background: rgba(255,255,255,0.8); border-bottom: 2px solid #ddd; z-index: 10;
+        }
+        .stat-box span { color: var(--accent-color); font-size: 3vh; }
+        #hud-restart-btn {
+            background-color: var(--accent-color); color: white; border: none;
+            padding: 1vh 2vw; font-size: 2vh; border-radius: 5px; cursor: pointer;
+            font-family: inherit; font-weight: bold;
+        }
+
+        /* --- BATTLEFIELD --- */
+        #battlefield {
+            position: relative; flex: 1; width: 100%; overflow: hidden;
+            background: linear-gradient(to bottom, #87CEEB 0%, #E0F7FA 70%, #fff 70%);
+        }
+        #ground {
+            position: absolute; bottom: 0; width: 100%; height: 25%;
+            background-color: var(--ground-color); border-top: 5px solid #5a6667;
+        }
+        .entity { position: absolute; bottom: 22%; transition: transform 0.1s linear; }
+        #soldier { left: 5%; width: 8vh; height: 12vh; z-index: 5; }
+        #tank { left: 90%; width: 14vh; height: 10vh; z-index: 4; transition: left 0.1s linear; }
+        .bullet {
+            position: absolute; width: 1.5vh; height: 1.5vh; background-color: #000;
+            border-radius: 50%; bottom: 28%; z-index: 6; display: none;
+        }
+
+        /* --- MATH PANEL --- */
+        #math-panel {
+            position: absolute; top: 12vh; left: 50%; transform: translateX(-50%);
+            background: var(--panel-bg); padding: 2vh 4vw; border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15); display: flex;
+            flex-direction: column; align-items: center; gap: 1.5vh;
+            z-index: 20; width: 70vw; max-width: 900px;
+        }
+        #error-msg {
+            color: var(--accent-color); font-weight: bold; height: 2.5vh;
+            font-size: 2vh; visibility: hidden;
+        }
+        #question-display {
+            font-size: 4vh; display: flex; align-items: center; gap: 2vw;
+            font-weight: bold; color: var(--primary-color);
+        }
+        .fraction { display: inline-flex; align-items: center; font-family: 'Courier New', Courier, monospace; }
+        .frac-part { display: inline-flex; flex-direction: column; align-items: center; font-size: 0.8em; }
+        .frac-num { border-bottom: 2px solid currentColor; width: 100%; text-align: center; }
+        .frac-den { width: 100%; text-align: center; }
+
+        input {
+            border: 2px solid #ccc; border-radius: 5px; text-align: center;
+            font-size: 3vh; color: var(--primary-color); outline: none;
+        }
+        #input-whole { width: 11vh; height: 9vh; margin-right: 1vh; }
+        #input-num, #input-den { width: 10vh; height: 4.2vh; }
+
+        #submit-btn {
+            background-color: var(--success-color); color: white; border: none;
+            padding: 1.5vh 3vw; font-size: 2.5vh; border-radius: 8px; cursor: pointer;
+        }
+
+        /* --- OVERLAYS --- */
+        #overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 100; color: white;
+            text-align: center; padding: 20px;
+        }
+        #overlay.hidden { visibility: hidden; opacity: 0; }
+        #start-btn {
+            background-color: var(--accent-color); color: white; border: none;
+            padding: 2vh 4vw; font-size: 3vh; border-radius: 10px; cursor: pointer;
+        }
+
+        .feedback-correct { animation: flashGreen 0.5s; }
+        .feedback-wrong { animation: flashRed 0.5s; }
+        @keyframes flashGreen { 0%, 100% { background-color: white; } 50% { background-color: #d4edda; } }
+        @keyframes flashRed { 0%, 100% { background-color: white; } 50% { background-color: #f8d7da; } }
+    </style>
+</head>
+<body>
+
+    <div id="hud">
+        <div class="stat-box">Score: <span id="score-display">0</span></div>
+        <button id="hud-restart-btn">RESTART</button>
+        <div class="stat-box">Time: <span id="time-display">45</span>s</div>
+    </div>
+
+    <div id="math-panel">
+        <div id="error-msg">Xato! To'g'ri qisqartirilgan mixed fraction kiriting</div>
+        <div id="question-display"></div>
+        <div id="input-area" style="display: flex; align-items: center; gap: 1.5vw;">
+            <div style="font-size: 4vh;">=</div>
+            <div style="display: flex; align-items: center;">
+                <input type="number" id="input-whole" placeholder="Butun">
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <input type="number" id="input-num" placeholder="Surat">
+                    <input type="number" id="input-den" placeholder="Maxraj">
+                </div>
+            </div>
+            <button id="submit-btn">FIRE!</button>
+        </div>
+    </div>
+
+    <div id="battlefield">
+        <div id="ground"></div>
+        <div id="soldier" class="entity">
+            <svg viewBox="0 0 100 150" width="100%" height="100%">
+                <line x1="50" y1="100" x2="50" y2="50" stroke="#333" stroke-width="8" />
+                <line x1="50" y1="100" x2="30" y2="140" stroke="#333" stroke-width="8" />
+                <line x1="50" y1="100" x2="70" y2="140" stroke="#333" stroke-width="8" />
+                <line x1="50" y1="60" x2="80" y2="80" stroke="#333" stroke-width="6" />
+                <circle cx="50" cy="35" r="15" fill="#eeb" stroke="#333" stroke-width="2"/>
+                <path d="M25 35 Q50 5 75 35" fill="#4a6534" stroke="#333" stroke-width="2"/>
+                <rect x="70" y="75" width="40" height="8" fill="#000" />
+            </svg>
+        </div>
+        <div id="tank" class="entity">
+            <svg viewBox="0 0 200 120" width="100%" height="100%">
+                <path d="M20,90 L180,90 A10,10 0 0 1 180,110 L20,110 A10,10 0 0 1 20,90" fill="#2c3e50" />
+                <circle cx="40" cy="100" r="8" fill="#7f8c8d" />
+                <circle cx="100" cy="100" r="8" fill="#7f8c8d" />
+                <circle cx="160" cy="100" r="8" fill="#7f8c8d" />
+                <path d="M30,90 L170,90 L160,50 L40,50 Z" fill="#5d6d7e" />
+                <path d="M60,50 L140,50 A30,30 0 0 1 110,20 L80,20 A30,30 0 0 1 60,50" fill="#34495e" />
+                <rect x="0" y="30" width="70" height="12" fill="#2c3e50" />
+            </svg>
+        </div>
+        <div id="bullet" class="bullet"></div>
+    </div>
+
+    <div id="overlay">
+        <h1 id="overlay-title">Math Defender</h1>
+        <p id="overlay-msg">Amallarni bajaring va bazani himoya qiling!</p>
+        <button id="start-btn">O'yinni boshlash</button>
+    </div>
+
+    <script>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let bgMusicSource = null;
+
+        function playBackgroundMusic() {
+            if (bgMusicSource) return;
+            const bufferSize = audioCtx.sampleRate * 2; 
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                const t = i / audioCtx.sampleRate;
+                data[i] = Math.sin(2 * Math.PI * 60 * t) * Math.exp(-5 * (t % 0.5));
+            }
+            bgMusicSource = audioCtx.createBufferSource();
+            bgMusicSource.buffer = buffer;
+            bgMusicSource.loop = true;
+            const gain = audioCtx.createGain();
+            gain.gain.value = 0.15;
+            bgMusicSource.connect(gain);
+            gain.connect(audioCtx.destination);
+            bgMusicSource.start();
+        }
+
+        function playRealShootSound() {
+            const duration = 0.4;
+            const noise = audioCtx.createBufferSource();
+            const gain = audioCtx.createGain();
+            const filter = audioCtx.createBiquadFilter();
+            const bufferSize = audioCtx.sampleRate * duration;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+            noise.buffer = buffer;
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(800, audioCtx.currentTime);
+            filter.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + duration);
+            gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+            noise.start();
+        }
+
+        const CONFIG = { SPAWN_POS: 90, TANK_SPEED_INITIAL: 0.035, TANK_PUSHBACK: 18, GAME_TIME: 45 };
+        let state = { active: false, score: 0, tankX: 90, tankSpeed: 0.035, timer: 45, lastTime: 0, currentProblem: null, gameOver: false };
+
+        const dom = {
+            tank: document.getElementById('tank'), bullet: document.getElementById('bullet'),
+            score: document.getElementById('score-display'), timer: document.getElementById('time-display'),
+            question: document.getElementById('question-display'), error: document.getElementById('error-msg'),
+            inputs: { w: document.getElementById('input-whole'), n: document.getElementById('input-num'), d: document.getElementById('input-den') },
+            overlay: document.getElementById('overlay'), panel: document.getElementById('math-panel')
+        };
+
+        const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
+
+        class Fraction {
+            constructor(n, d) { this.n = n; this.d = d || 1; this.simplify(); }
+            simplify() { const c = gcd(Math.abs(this.n), Math.abs(this.d)); this.n /= c; this.d /= c; }
+            toMixed() {
+                const w = Math.floor(this.n / this.d);
+                const n = this.n % this.d;
+                return { w, n, d: n === 0 ? 1 : this.d };
+            }
+        }
+
+        function generateProblem() {
+            const dens = [2, 3, 4, 5, 6, 8, 10];
+            const getM = () => {
+                const w = Math.floor(Math.random() * 2) + 1;
+                const d = dens[Math.floor(Math.random() * dens.length)];
+                const n = Math.floor(Math.random() * (d - 1)) + 1;
+                return { f: new Fraction(w * d + n, d), w, n, d };
+            };
+
+            const ops = ['+', '-', '*', '÷'];
+            const op = ops[Math.floor(Math.random() * ops.length)];
+            let f1 = getM(), f2 = getM(), res;
+
+            if (op === '+') {
+                res = new Fraction(f1.f.n * f2.f.d + f2.f.n * f1.f.d, f1.f.d * f2.f.d);
+            } else if (op === '-') {
+                if (f1.f.n/f1.f.d < f2.f.n/f2.f.d) [f1, f2] = [f2, f1];
+                res = new Fraction(f1.f.n * f2.f.d - f2.f.n * f1.f.d, f1.f.d * f2.f.d);
+            } else if (op === '*') {
+                res = new Fraction(f1.f.n * f2.f.n, f1.f.d * f2.f.d);
+            } else if (op === '÷') {
+                // Bo'lishda natija juda katta bo'lib ketmasligi uchun
+                res = new Fraction(f1.f.n * f2.f.d, f1.f.d * f2.f.n);
+            }
+
+            return { op, p1: f1, p2: f2, ans: res.toMixed() };
+        }
+
+        function renderProblem() {
+            state.currentProblem = generateProblem();
+            const p = state.currentProblem;
+            const rm = (m) => `<div class="fraction"><span>${m.w}</span><div class="frac-part"><span class="frac-num">${m.n}</span><span class="frac-den">${m.d}</span></div></div>`;
+            dom.question.innerHTML = `${rm(p.p1)} ${p.op === '÷' ? '÷' : (p.op === '*' ? '×' : p.op)} ${rm(p.p2)}`;
+            dom.inputs.w.value = ''; dom.inputs.n.value = ''; dom.inputs.d.value = '';
+            dom.error.style.visibility = 'hidden';
+            dom.inputs.w.focus();
+        }
+
+        function startGame() {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            playBackgroundMusic();
+            state = { active: true, score: 0, tankX: 90, tankSpeed: 0.035, timer: 45, lastTime: performance.now(), gameOver: false };
+            dom.overlay.classList.add('hidden');
+            dom.tank.style.transition = 'left 0.1s linear';
+            renderProblem();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function checkAnswer() {
+            if (!state.active || state.gameOver) return;
+            const w = parseInt(dom.inputs.w.value) || 0;
+            const n = parseInt(dom.inputs.n.value) || 0;
+            const d = parseInt(dom.inputs.d.value) || 1;
+            
+            const a = state.currentProblem.ans;
+            const userVal = (w * d + n) / d;
+            const ansVal = (a.w * a.d + a.n) / a.d;
+            
+            // To'g'ri qisqartirilganligini ham tekshirish (ixtiyoriy, lekin aniqlik uchun)
+            if (Math.abs(userVal - ansVal) < 0.00001) {
+                dom.panel.classList.add('feedback-correct');
+                playRealShootSound();
+                dom.bullet.style.display = 'block'; 
+                dom.bullet.style.left = '12%';
+                dom.bullet.offsetHeight; 
+                dom.bullet.style.transition = 'left 0.3s linear'; 
+                dom.bullet.style.left = state.tankX + '%';
+                
+                setTimeout(() => { 
+                    state.tankX = Math.min(90, state.tankX + CONFIG.TANK_PUSHBACK); 
+                    dom.bullet.style.display = 'none'; 
+                    dom.bullet.style.transition = 'none'; 
+                }, 300);
+                
+                state.score++; 
+                state.tankSpeed += 0.004;
+                setTimeout(() => { dom.panel.classList.remove('feedback-correct'); renderProblem(); }, 500);
+            } else {
+                dom.panel.classList.add('feedback-wrong');
+                dom.error.style.visibility = 'visible';
+                setTimeout(() => dom.panel.classList.remove('feedback-wrong'), 500);
+            }
+        }
+
+        function gameLoop(t) {
+            if (!state.active) return;
+            const dt = t - state.lastTime; state.lastTime = t;
+            
+            if (state.timer > 0) {
+                state.timer -= dt / 1000;
+                state.tankX -= state.tankSpeed * (dt / 16.67);
+            } else {
+                // Vaqt tugaganda tank "hujum" qiladi (tezlashadi)
+                state.timer = 0;
+                state.tankX -= 0.8; 
+            }
+
+            dom.tank.style.left = state.tankX + '%';
+            dom.score.innerText = state.score;
+            dom.timer.innerText = Math.max(0, Math.ceil(state.timer));
+
+            if (state.tankX <= 12) { 
+                endGame();
+            } else {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function endGame() {
+            state.active = false;
+            state.gameOver = true;
+            dom.overlay.classList.remove('hidden'); 
+            document.getElementById('overlay-title').innerText = "Baza bosib olindi!";
+            document.getElementById('overlay-msg').innerText = "Yakuniy natija: " + state.score;
+        }
+
+        document.getElementById('submit-btn').addEventListener('click', checkAnswer);
+        document.getElementById('start-btn').addEventListener('click', startGame);
+        document.getElementById('hud-restart-btn').addEventListener('click', startGame);
+        window.addEventListener('keydown', (e) => { if(e.key === 'Enter') checkAnswer(); });
+    </script>
+</body>
+</html>
