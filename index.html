@@ -46,7 +46,7 @@
             position: absolute; bottom: 0; width: 100%; height: 25%;
             background-color: var(--ground-color); border-top: 5px solid #5a6667;
         }
-        .entity { position: absolute; bottom: 22%; transition: transform 0.1s linear; }
+        .entity { position: absolute; bottom: 22%; }
         #soldier { left: 5%; width: 8vh; height: 12vh; z-index: 5; }
         #tank { left: 90%; width: 14vh; height: 10vh; z-index: 4; transition: left 0.1s linear; }
         .bullet {
@@ -207,7 +207,7 @@
             noise.start();
         }
 
-        const CONFIG = { SPAWN_POS: 90, TANK_SPEED_INITIAL: 0.035, TANK_PUSHBACK: 18, GAME_TIME: 45 };
+        const CONFIG = { SPAWN_POS: 90, TANK_SPEED_INITIAL: 0.035, GAME_TIME: 45 };
         let state = { active: false, score: 0, tankX: 90, tankSpeed: 0.035, timer: 45, lastTime: 0, currentProblem: null, gameOver: false };
 
         const dom = {
@@ -251,7 +251,6 @@
             } else if (op === '*') {
                 res = new Fraction(f1.f.n * f2.f.n, f1.f.d * f2.f.d);
             } else if (op === '÷') {
-                // Bo'lishda natija juda katta bo'lib ketmasligi uchun
                 res = new Fraction(f1.f.n * f2.f.d, f1.f.d * f2.f.n);
             }
 
@@ -271,8 +270,17 @@
         function startGame() {
             if (audioCtx.state === 'suspended') audioCtx.resume();
             playBackgroundMusic();
-            state = { active: true, score: 0, tankX: 90, tankSpeed: 0.035, timer: 45, lastTime: performance.now(), gameOver: false };
+            state = { 
+                active: true, 
+                score: 0, 
+                tankX: CONFIG.SPAWN_POS, 
+                tankSpeed: CONFIG.TANK_SPEED_INITIAL, 
+                timer: CONFIG.GAME_TIME, 
+                lastTime: performance.now(), 
+                gameOver: false 
+            };
             dom.overlay.classList.add('hidden');
+            dom.tank.style.left = state.tankX + '%';
             dom.tank.style.transition = 'left 0.1s linear';
             renderProblem();
             requestAnimationFrame(gameLoop);
@@ -288,25 +296,34 @@
             const userVal = (w * d + n) / d;
             const ansVal = (a.w * a.d + a.n) / a.d;
             
-            // To'g'ri qisqartirilganligini ham tekshirish (ixtiyoriy, lekin aniqlik uchun)
             if (Math.abs(userVal - ansVal) < 0.00001) {
                 dom.panel.classList.add('feedback-correct');
                 playRealShootSound();
+                
+                // Bullet animatsiyasi
                 dom.bullet.style.display = 'block'; 
                 dom.bullet.style.left = '12%';
                 dom.bullet.offsetHeight; 
                 dom.bullet.style.transition = 'left 0.3s linear'; 
                 dom.bullet.style.left = state.tankX + '%';
                 
+                // TANKNI ORQAGA QAYTARISH VA VAQTNI YANGILASH
+                state.timer = CONFIG.GAME_TIME;
+                state.tankX = CONFIG.SPAWN_POS; 
+                
                 setTimeout(() => { 
-                    state.tankX = Math.min(90, state.tankX + CONFIG.TANK_PUSHBACK); 
                     dom.bullet.style.display = 'none'; 
                     dom.bullet.style.transition = 'none'; 
+                    dom.tank.style.left = state.tankX + '%';
                 }, 300);
                 
                 state.score++; 
-                state.tankSpeed += 0.004;
-                setTimeout(() => { dom.panel.classList.remove('feedback-correct'); renderProblem(); }, 500);
+                state.tankSpeed += 0.005; // Har safar tank biroz tezlashadi
+                
+                setTimeout(() => { 
+                    dom.panel.classList.remove('feedback-correct'); 
+                    renderProblem(); 
+                }, 500);
             } else {
                 dom.panel.classList.add('feedback-wrong');
                 dom.error.style.visibility = 'visible';
@@ -316,15 +333,16 @@
 
         function gameLoop(t) {
             if (!state.active) return;
-            const dt = t - state.lastTime; state.lastTime = t;
+            const dt = t - state.lastTime; 
+            state.lastTime = t;
             
             if (state.timer > 0) {
                 state.timer -= dt / 1000;
+                // Tank harakati
                 state.tankX -= state.tankSpeed * (dt / 16.67);
             } else {
-                // Vaqt tugaganda tank "hujum" qiladi (tezlashadi)
                 state.timer = 0;
-                state.tankX -= 0.8; 
+                state.tankX -= 0.8; // Vaqt tugasa tank tezroq bostirib keladi
             }
 
             dom.tank.style.left = state.tankX + '%';
@@ -349,7 +367,9 @@
         document.getElementById('submit-btn').addEventListener('click', checkAnswer);
         document.getElementById('start-btn').addEventListener('click', startGame);
         document.getElementById('hud-restart-btn').addEventListener('click', startGame);
-        window.addEventListener('keydown', (e) => { if(e.key === 'Enter') checkAnswer(); });
+        window.addEventListener('keydown', (e) => { 
+            if(e.key === 'Enter') checkAnswer(); 
+        });
     </script>
 </body>
 </html>
