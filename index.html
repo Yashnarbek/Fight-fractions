@@ -23,7 +23,6 @@
             font-family: var(--font-main); display: flex; flex-direction: column;
         }
 
-        /* --- HUD --- */
         #hud {
             height: 10vh; display: flex; justify-content: space-between;
             align-items: center; padding: 0 5vw; font-size: 2.5vh;
@@ -37,7 +36,6 @@
             font-family: inherit; font-weight: bold;
         }
 
-        /* --- BATTLEFIELD --- */
         #battlefield {
             position: relative; flex: 1; width: 100%; overflow: hidden;
             background: linear-gradient(to bottom, #87CEEB 0%, #E0F7FA 70%, #fff 70%);
@@ -48,13 +46,12 @@
         }
         .entity { position: absolute; bottom: 22%; }
         #soldier { left: 5%; width: 8vh; height: 12vh; z-index: 5; }
-        #tank { left: 90%; width: 14vh; height: 10vh; z-index: 4; transition: left 0.1s linear; }
+        #tank { left: 90%; width: 14vh; height: 10vh; z-index: 4; }
         .bullet {
             position: absolute; width: 1.5vh; height: 1.5vh; background-color: #000;
             border-radius: 50%; bottom: 28%; z-index: 6; display: none;
         }
 
-        /* --- MATH PANEL --- */
         #math-panel {
             position: absolute; top: 12vh; left: 50%; transform: translateX(-50%);
             background: var(--panel-bg); padding: 2vh 4vw; border-radius: 15px;
@@ -71,7 +68,7 @@
             font-weight: bold; color: var(--primary-color);
         }
         .fraction { display: inline-flex; align-items: center; font-family: 'Courier New', Courier, monospace; }
-        .frac-part { display: inline-flex; flex-direction: column; align-items: center; font-size: 0.8em; }
+        .frac-part { display: inline-flex; flex-direction: column; align-items: center; font-size: 0.8em; margin-left: 5px;}
         .frac-num { border-bottom: 2px solid currentColor; width: 100%; text-align: center; }
         .frac-den { width: 100%; text-align: center; }
 
@@ -87,14 +84,13 @@
             padding: 1.5vh 3vw; font-size: 2.5vh; border-radius: 8px; cursor: pointer;
         }
 
-        /* --- OVERLAYS --- */
         #overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.85); display: flex; flex-direction: column;
             justify-content: center; align-items: center; z-index: 100; color: white;
             text-align: center; padding: 20px;
         }
-        #overlay.hidden { visibility: hidden; opacity: 0; }
+        #overlay.hidden { display: none; }
         #start-btn {
             background-color: var(--accent-color); color: white; border: none;
             padding: 2vh 4vw; font-size: 3vh; border-radius: 10px; cursor: pointer;
@@ -115,7 +111,7 @@
     </div>
 
     <div id="math-panel">
-        <div id="error-msg">Xato! To'g'ri qisqartirilgan mixed fraction kiriting</div>
+        <div id="error-msg">Xato! To'g'ri qisqartirilgan aralash kasr kiriting</div>
         <div id="question-display"></div>
         <div id="input-area" style="display: flex; align-items: center; gap: 1.5vw;">
             <div style="font-size: 4vh;">=</div>
@@ -180,88 +176,118 @@
             bgMusicSource.buffer = buffer;
             bgMusicSource.loop = true;
             const gain = audioCtx.createGain();
-            gain.gain.value = 0.15;
+            gain.gain.value = 0.1;
             bgMusicSource.connect(gain);
             gain.connect(audioCtx.destination);
             bgMusicSource.start();
         }
 
-        function playRealShootSound() {
-            const duration = 0.4;
-            const noise = audioCtx.createBufferSource();
+        function playShootSound() {
+            const duration = 0.3;
+            const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
-            const filter = audioCtx.createBiquadFilter();
-            const bufferSize = audioCtx.sampleRate * duration;
-            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-            const data = buffer.getChannelData(0);
-            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-            noise.buffer = buffer;
-            filter.type = 'lowpass';
-            filter.frequency.setValueAtTime(800, audioCtx.currentTime);
-            filter.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + duration);
-            gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + duration);
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-            noise.connect(filter);
-            filter.connect(gain);
+            osc.connect(gain);
             gain.connect(audioCtx.destination);
-            noise.start();
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
         }
 
-        const CONFIG = { SPAWN_POS: 90, TANK_SPEED_INITIAL: 0.035, GAME_TIME: 45 };
-        let state = { active: false, score: 0, tankX: 90, tankSpeed: 0.035, timer: 45, lastTime: 0, currentProblem: null, gameOver: false };
+        const CONFIG = { 
+            START_X: 90, 
+            END_X: 12, 
+            DURATION: 45 // 45 soniya
+        };
+        
+        let state = { 
+            active: false, 
+            score: 0, 
+            tankX: 90, 
+            timer: 45, 
+            lastTime: 0, 
+            currentProblem: null 
+        };
 
         const dom = {
-            tank: document.getElementById('tank'), bullet: document.getElementById('bullet'),
-            score: document.getElementById('score-display'), timer: document.getElementById('time-display'),
-            question: document.getElementById('question-display'), error: document.getElementById('error-msg'),
-            inputs: { w: document.getElementById('input-whole'), n: document.getElementById('input-num'), d: document.getElementById('input-den') },
-            overlay: document.getElementById('overlay'), panel: document.getElementById('math-panel')
+            tank: document.getElementById('tank'), 
+            bullet: document.getElementById('bullet'),
+            score: document.getElementById('score-display'), 
+            timer: document.getElementById('time-display'),
+            question: document.getElementById('question-display'), 
+            error: document.getElementById('error-msg'),
+            inputs: { 
+                w: document.getElementById('input-whole'), 
+                n: document.getElementById('input-num'), 
+                d: document.getElementById('input-den') 
+            },
+            overlay: document.getElementById('overlay'), 
+            panel: document.getElementById('math-panel')
         };
 
         const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
 
         class Fraction {
-            constructor(n, d) { this.n = n; this.d = d || 1; this.simplify(); }
-            simplify() { const c = gcd(Math.abs(this.n), Math.abs(this.d)); this.n /= c; this.d /= c; }
+            constructor(n, d) {
+                this.n = n;
+                this.d = d || 1;
+                this.simplify();
+            }
+            simplify() {
+                const common = gcd(Math.abs(this.n), Math.abs(this.d));
+                this.n /= common;
+                this.d /= common;
+            }
+            // Noto'g'ri kasrdan toza aralash kasr yasash (surat < maxraj)
             toMixed() {
                 const w = Math.floor(this.n / this.d);
-                const n = this.n % this.d;
-                return { w, n, d: n === 0 ? 1 : this.d };
+                const remN = this.n % this.d;
+                return { w, n: remN, d: remN === 0 ? 1 : this.d };
             }
         }
 
         function generateProblem() {
             const dens = [2, 3, 4, 5, 6, 8, 10];
-            const getM = () => {
+            const getRandM = () => {
                 const w = Math.floor(Math.random() * 2) + 1;
                 const d = dens[Math.floor(Math.random() * dens.length)];
                 const n = Math.floor(Math.random() * (d - 1)) + 1;
-                return { f: new Fraction(w * d + n, d), w, n, d };
+                return { w, n, d, totalN: w * d + n };
             };
 
             const ops = ['+', '-', '*', '÷'];
             const op = ops[Math.floor(Math.random() * ops.length)];
-            let f1 = getM(), f2 = getM(), res;
+            let m1 = getRandM(), m2 = getRandM();
+            let resN, resD;
 
             if (op === '+') {
-                res = new Fraction(f1.f.n * f2.f.d + f2.f.n * f1.f.d, f1.f.d * f2.f.d);
+                resN = m1.totalN * m2.d + m2.totalN * m1.d;
+                resD = m1.d * m2.d;
             } else if (op === '-') {
-                if (f1.f.n/f1.f.d < f2.f.n/f2.f.d) [f1, f2] = [f2, f1];
-                res = new Fraction(f1.f.n * f2.f.d - f2.f.n * f1.f.d, f1.f.d * f2.f.d);
+                if (m1.totalN/m1.d < m2.totalN/m2.d) [m1, m2] = [m2, m1];
+                resN = m1.totalN * m2.d - m2.totalN * m1.d;
+                resD = m1.d * m2.d;
             } else if (op === '*') {
-                res = new Fraction(f1.f.n * f2.f.n, f1.f.d * f2.f.d);
-            } else if (op === '÷') {
-                res = new Fraction(f1.f.n * f2.f.d, f1.f.d * f2.f.n);
+                resN = m1.totalN * m2.totalN;
+                resD = m1.d * m2.d;
+            } else { // Bo'lish
+                resN = m1.totalN * m2.d;
+                resD = m1.d * m2.totalN;
             }
 
-            return { op, p1: f1, p2: f2, ans: res.toMixed() };
+            const finalFrac = new Fraction(resN, resD);
+            return { op, p1: m1, p2: m2, ans: finalFrac.toMixed() };
         }
 
         function renderProblem() {
             state.currentProblem = generateProblem();
             const p = state.currentProblem;
-            const rm = (m) => `<div class="fraction"><span>${m.w}</span><div class="frac-part"><span class="frac-num">${m.n}</span><span class="frac-den">${m.d}</span></div></div>`;
-            dom.question.innerHTML = `${rm(p.p1)} ${p.op === '÷' ? '÷' : (p.op === '*' ? '×' : p.op)} ${rm(p.p2)}`;
+            const fmt = (m) => `<div class="fraction"><span>${m.w}</span><div class="frac-part"><span class="frac-num">${m.n}</span><span class="frac-den">${m.d}</span></div></div>`;
+            const opChar = p.op === '*' ? '×' : (p.op === '÷' ? '÷' : p.op);
+            dom.question.innerHTML = `${fmt(p.p1)} ${opChar} ${fmt(p.p2)}`;
             dom.inputs.w.value = ''; dom.inputs.n.value = ''; dom.inputs.d.value = '';
             dom.error.style.visibility = 'hidden';
             dom.inputs.w.focus();
@@ -270,60 +296,46 @@
         function startGame() {
             if (audioCtx.state === 'suspended') audioCtx.resume();
             playBackgroundMusic();
-            state = { 
-                active: true, 
-                score: 0, 
-                tankX: CONFIG.SPAWN_POS, 
-                tankSpeed: CONFIG.TANK_SPEED_INITIAL, 
-                timer: CONFIG.GAME_TIME, 
-                lastTime: performance.now(), 
-                gameOver: false 
-            };
+            state.active = true;
+            state.score = 0;
+            state.timer = CONFIG.DURATION;
+            state.tankX = CONFIG.START_X;
+            state.lastTime = performance.now();
             dom.overlay.classList.add('hidden');
-            dom.tank.style.left = state.tankX + '%';
-            dom.tank.style.transition = 'left 0.1s linear';
             renderProblem();
             requestAnimationFrame(gameLoop);
         }
 
         function checkAnswer() {
-            if (!state.active || state.gameOver) return;
-            const w = parseInt(dom.inputs.w.value) || 0;
-            const n = parseInt(dom.inputs.n.value) || 0;
-            const d = parseInt(dom.inputs.d.value) || 1;
-            
-            const a = state.currentProblem.ans;
-            const userVal = (w * d + n) / d;
-            const ansVal = (a.w * a.d + a.n) / a.d;
-            
-            if (Math.abs(userVal - ansVal) < 0.00001) {
+            if (!state.active) return;
+            const uW = parseInt(dom.inputs.w.value) || 0;
+            const uN = parseInt(dom.inputs.n.value) || 0;
+            const uD = parseInt(dom.inputs.d.value) || 1;
+            const target = state.currentProblem.ans;
+
+            // Ham qiymat, ham to'g'ri qisqartirilgan format tekshiriladi
+            if (uW === target.w && uN === target.n && uD === target.d) {
+                state.score++;
+                state.timer = CONFIG.DURATION; // Vaqtni qayta tiklash
+                state.tankX = CONFIG.START_X;  // Tankni orqaga qaytarish
+                
+                playShootSound();
                 dom.panel.classList.add('feedback-correct');
-                playRealShootSound();
                 
                 // Bullet animatsiyasi
-                dom.bullet.style.display = 'block'; 
+                dom.bullet.style.display = 'block';
                 dom.bullet.style.left = '12%';
-                dom.bullet.offsetHeight; 
-                dom.bullet.style.transition = 'left 0.3s linear'; 
-                dom.bullet.style.left = state.tankX + '%';
-                
-                // TANKNI ORQAGA QAYTARISH VA VAQTNI YANGILASH
-                state.timer = CONFIG.GAME_TIME;
-                state.tankX = CONFIG.SPAWN_POS; 
-                
-                setTimeout(() => { 
-                    dom.bullet.style.display = 'none'; 
-                    dom.bullet.style.transition = 'none'; 
-                    dom.tank.style.left = state.tankX + '%';
-                }, 300);
-                
-                state.score++; 
-                state.tankSpeed += 0.005; // Har safar tank biroz tezlashadi
-                
-                setTimeout(() => { 
-                    dom.panel.classList.remove('feedback-correct'); 
-                    renderProblem(); 
-                }, 500);
+                setTimeout(() => {
+                    dom.bullet.style.transition = 'left 0.2s ease-in';
+                    dom.bullet.style.left = state.tankX + '%';
+                }, 10);
+
+                setTimeout(() => {
+                    dom.bullet.style.display = 'none';
+                    dom.bullet.style.transition = 'none';
+                    dom.panel.classList.remove('feedback-correct');
+                    renderProblem();
+                }, 400);
             } else {
                 dom.panel.classList.add('feedback-wrong');
                 dom.error.style.visibility = 'visible';
@@ -331,25 +343,22 @@
             }
         }
 
-        function gameLoop(t) {
+        function gameLoop(now) {
             if (!state.active) return;
-            const dt = t - state.lastTime; 
-            state.lastTime = t;
+            const dt = (now - state.lastTime) / 1000;
+            state.lastTime = now;
+
+            state.timer -= dt;
             
-            if (state.timer > 0) {
-                state.timer -= dt / 1000;
-                // Tank harakati
-                state.tankX -= state.tankSpeed * (dt / 16.67);
-            } else {
-                state.timer = 0;
-                state.tankX -= 0.8; // Vaqt tugasa tank tezroq bostirib keladi
-            }
+            // Tankning 45 soniyada bosib o'tadigan masofasi: (START - END) / 45
+            const speed = (CONFIG.START_X - CONFIG.END_X) / CONFIG.DURATION;
+            state.tankX -= speed * dt;
 
             dom.tank.style.left = state.tankX + '%';
-            dom.score.innerText = state.score;
             dom.timer.innerText = Math.max(0, Math.ceil(state.timer));
+            dom.score.innerText = state.score;
 
-            if (state.tankX <= 12) { 
+            if (state.tankX <= CONFIG.END_X || state.timer <= 0) {
                 endGame();
             } else {
                 requestAnimationFrame(gameLoop);
@@ -358,18 +367,15 @@
 
         function endGame() {
             state.active = false;
-            state.gameOver = true;
-            dom.overlay.classList.remove('hidden'); 
+            dom.overlay.classList.remove('hidden');
             document.getElementById('overlay-title').innerText = "Baza bosib olindi!";
-            document.getElementById('overlay-msg').innerText = "Yakuniy natija: " + state.score;
+            document.getElementById('overlay-msg').innerText = "Sizning natijangiz: " + state.score;
         }
 
         document.getElementById('submit-btn').addEventListener('click', checkAnswer);
         document.getElementById('start-btn').addEventListener('click', startGame);
         document.getElementById('hud-restart-btn').addEventListener('click', startGame);
-        window.addEventListener('keydown', (e) => { 
-            if(e.key === 'Enter') checkAnswer(); 
-        });
+        window.addEventListener('keydown', (e) => { if(e.key === 'Enter') checkAnswer(); });
     </script>
 </body>
 </html>
